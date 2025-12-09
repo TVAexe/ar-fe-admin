@@ -1,5 +1,3 @@
-// src/utils/axios.ts
-
 import { MESSAGES } from '@/config/const';
 import { toastError } from '@/utils/toast';
 import axios, { AxiosInstance } from 'axios';

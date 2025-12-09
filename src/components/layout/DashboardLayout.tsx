@@ -19,7 +19,7 @@ interface MenuItem {
 }
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -79,19 +79,10 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   return (
     <div className="min-h-screen bg-grey-50">
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-gray-600 bg-opacity-75 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
       {/* Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
-        
+        sidebarOpen ? 'translate-x-0 lg:translate-x-0' : '-translate-x-full lg:-translate-x-full'
+      } transition-transform duration-300 ease-in-out lg:static lg:inset-0`}>
         {/* Logo */}
         <div className="flex items-center justify-center h-16 px-4 bg-primary">
           <h1 className="text-xl font-bold text-white">AR Admin</h1>
@@ -121,6 +112,21 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             ))}
           </div>
         </nav>
+        
+        <div className="absolute bottom-20 left-2 right-2">
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => setSidebarOpen(false)}
+            classes="w-full text-grey-700 border-grey-300 hover:bg-grey-50"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Hide sidebar
+          </Button>
+        </div>
+
 
         {/* Logout button */}
         <div className="absolute bottom-4 left-2 right-2">
@@ -141,7 +147,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       {/* Main content */}
       <div className="lg:pl-64 flex flex-col flex-1">
         {/* Top header */}
-        <header className="bg-white shadow-sm border-b border-grey-200 lg:static lg:overflow-y-visible">
+        <header className="sticky top-0 z-30 bg-white shadow-sm border-b border-grey-200">
           <div className="px-4 sm:px-6 lg:px-8">
             <div className="relative flex justify-between h-16">
               <div className="relative z-10 flex items-center lg:w-auto">
