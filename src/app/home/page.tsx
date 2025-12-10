@@ -2,50 +2,75 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import Loading from '@/components/common/Loading';
 import Button from '@/components/common/Button';
 import { getToken } from '@/utils';
 import ROUTES from '@/config/route';
+import { getOrders, OrderStatus } from '@/apis/orderAPI';
 
 const DashboardPage = () => {
   const router = useRouter();
-  // Check token on each render - this is fast and avoids useEffect issues
   const token = getToken();
-  // If no token, redirect and show loading
+
+  // Fetch orders data for statistics
+  const { data: ordersData, isLoading: ordersLoading } = useQuery({
+    queryKey: ['orders-stats'],
+    queryFn: () => getOrders({ page: 0, size: 100 }), // Get larger sample for stats
+    enabled: !!token,
+  });
+
   if (!token) {
     router.replace(ROUTES.LOGIN);
     return <Loading />;
   }
 
+  if (ordersLoading) {
+    return <Loading />;
+  }
+
+  const orders = ordersData?.data?.result ?? [];
+  const totalOrders = ordersData?.data?.meta?.total ?? 0;
+  const pendingCount = orders.filter(o => o.status === OrderStatus.PENDING).length;
+  const confirmedCount = orders.filter(o => o.status === OrderStatus.CONFIRMED).length;
+  const inTransitCount = orders.filter(o => [OrderStatus.SHIPPING, OrderStatus.SHIPPED].includes(o.status)).length;
+  const deliveredCount = orders.filter(o => o.status === OrderStatus.DELIVERED).length;
+
   const statsCards = [
     {
-      title: 'Total Orders',
-      value: '2,345',
-      change: '+12%',
+      title: 'Pending Orders',
+      value: pendingCount.toString(),
+      subtitle: `${totalOrders} total orders`,
+      changeType: 'neutral' as const,
+      bgColor: 'bg-yellow-50',
+      borderColor: 'border-yellow-400',
+      icon: (
+        <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+    },
+    {
+      title: 'Confirmed',
+      value: confirmedCount.toString(),
+      subtitle: 'Ready to ship',
       changeType: 'positive' as const,
+      bgColor: 'bg-blue-50',
+      borderColor: 'border-blue-400',
       icon: (
         <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
     },
     {
-      title: 'Total Products',
-      value: '156',
-      change: '+3%',
-      changeType: 'positive' as const,
-      icon: (
-        <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-        </svg>
-      ),
-    },
-    {
-      title: 'Active Users',
-      value: '1,234',
-      change: '+8%',
-      changeType: 'positive' as const,
+      title: 'In Transit',
+      value: inTransitCount.toString(),
+      subtitle: 'Shipping + Shipped',
+      changeType: 'neutral' as const,
+      bgColor: 'bg-purple-50',
+      borderColor: 'border-purple-400',
       icon: (
         <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-1a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -53,13 +78,15 @@ const DashboardPage = () => {
       ),
     },
     {
-      title: 'Revenue',
-      value: '$45,678',
-      change: '+15%',
+      title: 'Delivered',
+      value: deliveredCount.toString(),
+      subtitle: 'Completed orders',
       changeType: 'positive' as const,
+      bgColor: 'bg-green-50',
+      borderColor: 'border-green-400',
       icon: (
-        <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+        <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
         </svg>
       ),
     },
@@ -74,26 +101,30 @@ const DashboardPage = () => {
           <p className="text-grey-600">Manage your AR application from this central hub</p>
         </div>
 
-        {/* Stats grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {statsCards.map((card, index) => (
-            <div key={index} className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-grey-600">{card.title}</p>
-                  <p className="text-2xl font-bold text-grey-900">{card.value}</p>
-                  <p className={`text-sm ${
-                    card.changeType === 'positive' ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {card.change} from last month
-                  </p>
-                </div>
-                <div className="shrink-0">
-                  {card.icon}
+        {/* Order Statistics */}
+        <div>
+          <h2 className="text-lg font-bold text-grey-800 mb-4">Order Statistics</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {statsCards.map((card, index) => (
+              <div 
+                key={index} 
+                className={`${card.bgColor} rounded-lg shadow-sm p-4 border-l-4 ${card.borderColor}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm text-grey-600">{card.title}</p>
+                    <p className="text-2xl font-bold text-grey-900 mt-1">{card.value}</p>
+                    {card.subtitle && (
+                      <p className="text-xs text-grey-500 mt-1">{card.subtitle}</p>
+                    )}
+                  </div>
+                  <div className="shrink-0 ml-4">
+                    {card.icon}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* Quick actions */}
