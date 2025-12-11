@@ -4,7 +4,7 @@ const ROUTES = {
   ORDERS: '/orders',
   PRODUCTS: '/products',
   USERS: '/users',
-
+  ROLES: '/roles',
   LOGIN: '/login',
 
   NOT_FOUND: 'not-found',

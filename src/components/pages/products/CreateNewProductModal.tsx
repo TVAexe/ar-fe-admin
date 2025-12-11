@@ -8,7 +8,7 @@ import Image from 'next/image';
 import Input from '@/components/common/Input';
 import Button from '@/components/common/Button';
 import { createProduct, CreateProductPayload } from '@/apis/productAPI';
-import { getCategories } from '@/apis/categoriesAPI';
+import { Category, getCategories } from '@/apis/categoriesAPI';
 import CreateCategoryModal from './CreateNewCategoryModal';
 import { toastError, toastSuccess } from '@/utils/toast';
 

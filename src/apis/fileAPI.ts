@@ -32,7 +32,7 @@ export const uploadMultipleFiles = async (files: File[]): Promise<UploadFilesRes
       'Content-Type': 'multipart/form-data',
     },
   });
-  
+
   // Ensure URLs have the full S3 path
   const responseData = res.data;
   if (responseData.data && responseData.data.fileUrls) {
@@ -44,7 +44,6 @@ export const uploadMultipleFiles = async (files: File[]): Promise<UploadFilesRes
       return url;
     });
   }
-  
   return responseData;
 };
 

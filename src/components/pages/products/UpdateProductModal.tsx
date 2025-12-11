@@ -95,7 +95,6 @@ const UpdateProductModal: React.FC<UpdateProductModalProps> = ({
       handleClose();
     },
     onError: (error: Error) => {
-      console.error('❌ Update error:', error);
       toastError(error.message || 'Failed to update product');
       setIsProcessing(false);
     },
@@ -212,7 +211,6 @@ const UpdateProductModal: React.FC<UpdateProductModalProps> = ({
       };
       updateMutation.mutate({ id: productId, payload });
     } catch (error) {
-      console.error('❌ Error in submit:', error);
       toastError(error instanceof Error ? error.message : 'Failed to process images');
       setIsProcessing(false);
     }
