@@ -23,13 +23,15 @@ interface CreateProductFormData {
   saleRate: number;
   quantity: number;
   description: string;
-  categoryId: number | string;
+  categoryId: number;
 }
 
 const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose }) => {
   const queryClient = useQueryClient();
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [selectedModelFile, setSelectedModelFile] = useState<File | null>(null);
+  const [modelFileName, setModelFileName] = useState<string>('');
   const [isCreateCategoryModalOpen, setIsCreateCategoryModalOpen] = useState(false);
 
   const {
@@ -64,6 +66,8 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
     reset();
     setSelectedImages([]);
     setPreviewUrls([]);
+    setSelectedModelFile(null);
+    setModelFileName('');
     onClose();
   };
 
@@ -85,15 +89,46 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
     setPreviewUrls((prev) => [...prev, ...newPreviewUrls]);
   };
 
+  const handleModelFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.name.toLowerCase().endsWith('.glb')) {
+      toastError('Please select a valid .glb file');
+      return;
+    }
+
+    // Validate file size (max 50MB)
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+      toastError('Model file size must be less than 50MB');
+      return;
+    }
+
+    setSelectedModelFile(file);
+    setModelFileName(file.name);
+  };
+
   const removeImage = (index: number) => {
     URL.revokeObjectURL(previewUrls[index]);
     setSelectedImages((prev) => prev.filter((_, i) => i !== index));
     setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const removeModelFile = () => {
+    setSelectedModelFile(null);
+    setModelFileName('');
+  };
+
   const onSubmit = (data: CreateProductFormData) => {
     if (selectedImages.length === 0) {
       toastError('Please select at least one image');
+      return;
+    }
+
+    if (!selectedModelFile) {
+      toastError('Please select a 3D model file (.glb)');
       return;
     }
 
@@ -110,14 +145,13 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
       description: data.description,
       categoryId: Number(data.categoryId),
       images: selectedImages,
+      modelFile: selectedModelFile,
     };
 
     createMutation.mutate(payload);
   };
 
-  const handleCategoryCreated = () => {
-    queryClient.invalidateQueries({ queryKey: ['categories'] });
-  };
+  if (!isOpen) return null;
 
   return (
     <>
@@ -129,33 +163,35 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
       >
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="space-y-6 max-h-[80vh] overflow-y-auto pr-1 md:pr-2"
+          className="space-y-4 max-h-[70vh] overflow-y-auto pr-2"
         >
-          {/* Product name */}
-          <div className="bg-white">
-            <Input
-              id="name"
-              label="Product Name"
-              type="text"
-              placeholder="Enter product name"
-              register={register('name', {
-                required: 'Product name is required',
-              })}
-              error={errors.name?.message}
-              disabled={createMutation.isPending}
-            />
-          </div>
+          {/* Product Name */}
+          <Input
+            id="name"
+            label="Product Name"
+            type="text"
+            placeholder="Enter product name"
+            register={register('name', {
+              required: 'Product name is required',
+              minLength: {
+                value: 3,
+                message: 'Product name must be at least 3 characters',
+              },
+            })}
+            error={errors.name?.message}
+            disabled={createMutation.isPending}
+          />
 
-          {/* Price & Sale */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Price & Sale Rate */}
+          <div className="grid grid-cols-2 gap-4">
             <Input
               id="oldPrice"
-              label="Price ($)"
+              label="Price"
               type="number"
-              placeholder="1299.99"
+              placeholder="0"
               register={register('oldPrice', {
                 required: 'Price is required',
-                min: { value: 0, message: 'Price must be positive' },
+                min: { value: 0, message: 'Price must be greater than 0' },
               })}
               error={errors.oldPrice?.message}
               disabled={createMutation.isPending}
@@ -165,11 +201,11 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
               id="saleRate"
               label="Sale Rate (%)"
               type="number"
-              placeholder="20"
+              placeholder="0"
               register={register('saleRate', {
                 required: 'Sale rate is required',
-                min: { value: 0, message: 'Must be 0 or greater' },
-                max: { value: 100, message: 'Must be 100 or less' },
+                min: { value: 0, message: 'Sale rate must be between 0-100' },
+                max: { value: 100, message: 'Sale rate must be between 0-100' },
               })}
               error={errors.saleRate?.message}
               disabled={createMutation.isPending}
@@ -177,15 +213,15 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
           </div>
 
           {/* Quantity & Category */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <Input
               id="quantity"
               label="Quantity"
               type="number"
-              placeholder="50"
+              placeholder="0"
               register={register('quantity', {
                 required: 'Quantity is required',
-                min: { value: 0, message: 'Quantity must be positive' },
+                min: { value: 0, message: 'Quantity must be greater than or equal to 0' },
               })}
               error={errors.quantity?.message}
               disabled={createMutation.isPending}
@@ -196,14 +232,12 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
                 htmlFor="categoryId"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
-                Category
+                Category <span className="text-red-500">*</span>
               </label>
               <div className="flex gap-2">
                 <select
                   id="categoryId"
-                  {...register('categoryId', {
-                    required: 'Category is required',
-                  })}
+                  {...register('categoryId', { required: 'Category is required' })}
                   disabled={isCategoriesLoading || createMutation.isPending}
                   className="flex-1 mt-1 block rounded-md border border-gray-300 px-4 py-2 text-gray-900 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:opacity-50"
                 >
@@ -259,11 +293,116 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
             )}
           </div>
 
+          {/* 3D Model File Upload */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-700">
+                3D Model File <span className="text-red-500">*</span>
+              </label>
+              {selectedModelFile && (
+                <span className="text-xs text-green-600 font-medium">
+                  ✓ File selected
+                </span>
+              )}
+            </div>
+
+            <label
+              htmlFor="modelFile"
+              className={`flex items-center justify-center w-full px-4 py-4 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors ${
+                selectedModelFile ? 'border-green-500 bg-green-50' : 'border-gray-300'
+              } ${createMutation.isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className="text-center">
+                <svg
+                  className="mx-auto h-12 w-12 text-gray-400"
+                  stroke="currentColor"
+                  fill="none"
+                  viewBox="0 0 48 48"
+                >
+                  <path
+                    d="M8 14a5 5 0 015-5h22a5 5 0 015 5v20a5 5 0 01-5 5H13a5 5 0 01-5-5V14z"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M18 14v20m12-20v20M8 24h32"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <p className="mt-1 text-sm text-gray-600">
+                  {selectedModelFile
+                    ? `Selected: ${modelFileName}`
+                    : 'Click to upload 3D model (.glb)'}
+                </p>
+                <p className="text-xs text-gray-500">GLB format, max 50MB</p>
+              </div>
+              <input
+                id="modelFile"
+                type="file"
+                accept=".glb"
+                onChange={handleModelFileChange}
+                disabled={createMutation.isPending}
+                className="hidden"
+              />
+            </label>
+
+            {selectedModelFile && (
+              <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-5 h-5 text-green-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-green-800">{modelFileName}</p>
+                      <p className="text-xs text-green-600">
+                        {(selectedModelFile.size / (1024 * 1024)).toFixed(2)} MB
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeModelFile}
+                    disabled={createMutation.isPending}
+                    className="text-red-600 hover:text-red-800 transition-colors"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Images */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="block text-sm font-medium text-gray-700">
-                Product Images (Max 5)
+                Product Images (Max 5) <span className="text-red-500">*</span>
               </label>
               <span className="text-xs text-gray-500">
                 {selectedImages.length} / 5 selected
@@ -310,9 +449,7 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
 
             {previewUrls.length > 0 && (
               <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">
-                  Preview
-                </h4>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Preview</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                   {previewUrls.map((url, index) => (
                     <div
@@ -349,11 +486,6 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
                           />
                         </svg>
                       </button>
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
-                        <p className="text-xs text-white truncate font-medium">
-                          {selectedImages[index]?.name}
-                        </p>
-                      </div>
                     </div>
                   ))}
                 </div>
@@ -361,7 +493,7 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
             )}
           </div>
 
-          {/* Footer */}
+          {/* Action Buttons */}
           <div className="flex justify-end gap-3 pt-4 border-t">
             <Button
               type="button"
@@ -390,7 +522,9 @@ const CreateProductModal: React.FC<CreateProductModalProps> = ({ isOpen, onClose
       <CreateCategoryModal
         isOpen={isCreateCategoryModalOpen}
         onClose={() => setIsCreateCategoryModalOpen(false)}
-        onCategoryCreated={handleCategoryCreated}
+        onCategoryCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ['categories'] });
+        }}
       />
     </>
   );

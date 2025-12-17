@@ -4,7 +4,7 @@ import axios, { AxiosInstance } from 'axios';
 import { resetToken } from '@/utils';
 
 const BASE_URL = 'https://arbe-production.up.railway.app';
-const TIMEOUT = 10000;
+const TIMEOUT = 30000;
 const COMMON_HEADERS = {
   'Content-Type': 'application/json',
   Accept: 'application/json',

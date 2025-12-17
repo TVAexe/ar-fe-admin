@@ -38,6 +38,9 @@ const UpdateProductModal: React.FC<UpdateProductModalProps> = ({
   const [newImages, setNewImages] = useState<File[]>([]);
   const [newPreviewUrls, setNewPreviewUrls] = useState<string[]>([]);
   const [removedImageUrls, setRemovedImageUrls] = useState<string[]>([]);
+  const [newModelFile, setNewModelFile] = useState<File | null>(null);
+  const [newModelFileName, setNewModelFileName] = useState<string>('');
+  const [isModelRemoved, setIsModelRemoved] = useState(false);
   const [isCreateCategoryModalOpen, setIsCreateCategoryModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -105,6 +108,9 @@ const UpdateProductModal: React.FC<UpdateProductModalProps> = ({
     setNewImages([]);
     setNewPreviewUrls([]);
     setRemovedImageUrls([]);
+    setNewModelFile(null);
+    setNewModelFileName('');
+    setIsModelRemoved(false);
     setIsProcessing(false);
     onClose();
   };
@@ -132,6 +138,39 @@ const UpdateProductModal: React.FC<UpdateProductModalProps> = ({
 
   const removeExistingImage = (url: string) => {
     setRemovedImageUrls((prev) => [...prev, url]);
+  };
+
+  const handleModelFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.name.toLowerCase().endsWith('.glb')) {
+      toastError('Please select a valid .glb file');
+      return;
+    }
+
+    // Validate file size (max 50MB)
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+      toastError('Model file size must be less than 50MB');
+      return;
+    }
+
+    setNewModelFile(file);
+    setNewModelFileName(file.name);
+    setIsModelRemoved(false); // Reset removed flag if uploading new file
+  };
+
+  const removeNewModelFile = () => {
+    setNewModelFile(null);
+    setNewModelFileName('');
+  };
+
+  const removeExistingModel = () => {
+    setIsModelRemoved(true);
+    setNewModelFile(null);
+    setNewModelFileName('');
   };
 
   const removeNewImage = (index: number) => {
@@ -179,7 +218,41 @@ const UpdateProductModal: React.FC<UpdateProductModalProps> = ({
         }
       }
 
-      // 4. Calculate final image URLs
+      // 4. Upload new model file if provided
+      let finalModelUrl: string | undefined = product?.arModel?.glbUrl || undefined;
+      
+      if (newModelFile) {
+        // Upload new model file
+        const modelUploadResponse = await uploadMultipleFiles([newModelFile]);
+        if (modelUploadResponse && modelUploadResponse.data && modelUploadResponse.data.fileUrls) {
+          const modelUrls = Array.isArray(modelUploadResponse.data.fileUrls) 
+            ? modelUploadResponse.data.fileUrls 
+            : [];
+          if (modelUrls.length > 0) {
+            // Delete old model if exists
+            if (product?.arModel?.glbUrl) {
+              try {
+                await deleteFile(product.arModel.glbUrl);
+              } catch (error) {
+                console.error('❌ Failed to delete old model:', error);
+              }
+            }
+            finalModelUrl = modelUrls[0];
+          }
+        }
+      } else if (isModelRemoved) {
+        // Delete old model if removed
+        if (product?.arModel?.glbUrl) {
+          try {
+            await deleteFile(product.arModel.glbUrl);
+          } catch (error) {
+            console.error('❌ Failed to delete model:', error);
+          }
+        }
+        finalModelUrl = undefined;
+      }
+
+      // 5. Calculate final image URLs
       const finalImageUrls = [...remainingExistingUrls, ...newImageUrls];
       if (finalImageUrls.length === 0) {
         toastError('Please keep at least one image');
@@ -199,7 +272,7 @@ const UpdateProductModal: React.FC<UpdateProductModalProps> = ({
         return;
       }
 
-      // 5. Update product with final URLs
+      // 6. Update product with final URLs and modelUrl
       const payload: UpdateProductPayload = {
         name: data.name,
         oldPrice: Number(data.oldPrice),
@@ -208,6 +281,7 @@ const UpdateProductModal: React.FC<UpdateProductModalProps> = ({
         description: data.description,
         categoryId: Number(data.categoryId),
         imageUrl: finalImageUrls,
+        modelUrl: finalModelUrl,
       };
       updateMutation.mutate({ id: productId, payload });
     } catch (error) {
@@ -378,6 +452,147 @@ const UpdateProductModal: React.FC<UpdateProductModalProps> = ({
             )}
           </div>
 
+          {/* 3D Model Section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-700">
+                3D Model File (.glb)
+              </label>
+              {(product?.arModel?.glbUrl && !isModelRemoved) && !newModelFile && (
+                <span className="text-xs text-blue-600 font-medium">
+                  ✓ Model exists
+                </span>
+              )}
+              {newModelFile && (
+                <span className="text-xs text-green-600 font-medium">
+                  ✓ New model selected
+                </span>
+              )}
+            </div>
+
+            {/* Current Model Display */}
+            {product?.arModel?.glbUrl && !isModelRemoved && !newModelFile && (
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14a5 5 0 015-5h6a5 5 0 015 5v6a5 5 0 01-5 5h-6a5 5 0 01-5-5v-6z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10v10m8-10v10M8 14h8" />
+                    </svg>
+                    <div>
+                      <h4 className="text-sm font-semibold text-blue-800">Current 3D Model</h4>
+                      <a
+                        href={product.arModel.glbUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        View Model
+                      </a>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeExistingModel}
+                    disabled={isProcessing}
+                    className="text-red-600 hover:text-red-800 transition-colors p-2 rounded-md hover:bg-red-50"
+                    title="Remove model"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* New Model Upload */}
+            {(!product?.arModel?.glbUrl || isModelRemoved) && !newModelFile && (
+              <label
+                htmlFor="modelFile"
+                className="flex items-center justify-center w-full px-4 py-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary transition-colors"
+              >
+                <div className="text-center">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                    <path d="M8 14a5 5 0 015-5h22a5 5 0 015 5v20a5 5 0 01-5 5H13a5 5 0 01-5-5V14z" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M18 14v20m12-20v20M8 24h32" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <p className="mt-1 text-sm text-gray-600">Click to upload 3D model (.glb)</p>
+                  <p className="text-xs text-gray-500">GLB format, max 50MB</p>
+                </div>
+                <input
+                  id="modelFile"
+                  type="file"
+                  accept=".glb"
+                  onChange={handleModelFileChange}
+                  disabled={isProcessing}
+                  className="hidden"
+                />
+              </label>
+            )}
+
+            {/* Replace existing model */}
+            {product?.arModel?.glbUrl && !isModelRemoved && !newModelFile && (
+              <label
+                htmlFor="modelFileReplace"
+                className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-blue-300 bg-blue-50 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-100 transition-colors"
+              >
+                <div className="text-center">
+                  <p className="text-sm text-blue-700 font-medium">Replace with new model</p>
+                  <p className="text-xs text-blue-600">Click to upload a new .glb file</p>
+                </div>
+                <input
+                  id="modelFileReplace"
+                  type="file"
+                  accept=".glb"
+                  onChange={handleModelFileChange}
+                  disabled={isProcessing}
+                  className="hidden"
+                />
+              </label>
+            )}
+
+            {/* New Model File Selected */}
+            {newModelFile && (
+              <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-green-800">{newModelFileName}</p>
+                      <p className="text-xs text-green-600">
+                        {(newModelFile.size / (1024 * 1024)).toFixed(2)} MB - Ready to upload
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeNewModelFile}
+                    disabled={isProcessing}
+                    className="text-red-600 hover:text-red-800 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isModelRemoved && !newModelFile && (
+              <div className="bg-red-50 rounded-lg p-3 border border-red-200">
+                <p className="text-sm text-red-700">
+                  <strong>⚠️ Model will be removed</strong> - The 3D model will be deleted when you save.
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Images */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -524,6 +739,23 @@ const UpdateProductModal: React.FC<UpdateProductModalProps> = ({
                   ))}
                 </div>
               </div>
+            )}
+
+            {product?.modelUrl && (
+          <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+            <h4 className="text-sm font-semibold text-blue-700 mb-2">Current 3D Model</h4>
+            <a
+              href={product.modelUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              View 3D Model
+            </a>
+          </div>
             )}
 
             {/* Upload Progress */}
